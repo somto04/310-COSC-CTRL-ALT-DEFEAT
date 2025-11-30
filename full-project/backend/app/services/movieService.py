@@ -77,8 +77,11 @@ def getMovieByFilter(
                 continue
 
         # Year filter
-        if yearQuery and movieYear != yearQuery:
-            continue
+        if yearQuery:
+            startYear = int(yearQuery)
+            endYear = startYear + 10
+            if not (startYear <= int(movieYear) < endYear):
+                continue
 
         # Director filter
         if directorQuery:

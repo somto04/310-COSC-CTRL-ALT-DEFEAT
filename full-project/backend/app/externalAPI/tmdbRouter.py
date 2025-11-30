@@ -27,6 +27,8 @@ def movieDetailsById(movieId: int):
 
     tmdbId = movie.tmdbId
     details = getMovieDetailsById(tmdbId)
+    if details is None:
+        raise HTTPException(status_code=404, detail="TMDB movie not found")
     return details
 
 

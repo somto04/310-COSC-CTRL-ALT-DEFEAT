@@ -231,10 +231,11 @@ def testGetMovieByFilterFiltersByYear(monkeypatch, sampleMovieList):
 
     monkeypatch.setattr(movieServiceModule, "loadMovies", fakeLoadMovies)
 
-    resultMovies = getMovieByFilter(year=2010)
+    resultMovies = getMovieByFilter(year=2010) # function now users decade
 
-    assert len(resultMovies) == 1
-    assert resultMovies[0].title == "Inception"
+    assert len(resultMovies) == 2
+    assert resultMovies[1].title == "Inception"
+    assert resultMovies[0].title == "Avengers Endgame"
 
 
 def testGetMovieByFilterFiltersByDirector(monkeypatch, sampleMovieList):
