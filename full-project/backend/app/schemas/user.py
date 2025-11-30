@@ -227,7 +227,7 @@ class AdminUserUpdate(UserUpdate):
         default=None, description="Role of the user in the system, e.g., USER or ADMIN"
     )
     penalties: Optional[int] = Field(
-        None,
+        default=None,
         validation_alias=AliasChoices("penaltyCount", "penalties"),
         description="Number of penalties assigned to the user, 3 is the max.",
     )

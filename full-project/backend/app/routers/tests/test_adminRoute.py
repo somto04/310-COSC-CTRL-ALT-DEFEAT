@@ -9,6 +9,8 @@ from app.schemas.role import Role
 from app.schemas.user import User
 from app.schemas.review import Review
 import app.repos.reviewRepo as reviewRepo
+from app.services import adminService
+from app.services.userService import UserNotFoundError
 
 
 @pytest.fixture(autouse=True)
@@ -145,9 +147,12 @@ def test_accept_flag_success(client):
     mockReviews = [mockReview]
     mockUserAfterPenalty = createMockUser(5, penalties=1, isBanned=False)
 
-    with patch("app.routers.adminRoute.loadReviews", return_value=mockReviews), \
-         patch("app.routers.adminRoute.deleteReview") as mockDelete, \
-         patch("app.routers.adminRoute.incrementPenaltyForUser", return_value=mockUserAfterPenalty) as mockPenalty:
+    with patch("app.routers.adminRoute.loadReviews", return_value=mockReviews), patch(
+        "app.routers.adminRoute.deleteReview"
+    ) as mockDelete, patch(
+        "app.routers.adminRoute.incrementPenaltyForUser",
+        return_value=mockUserAfterPenalty,
+    ) as mockPenalty:
 
         response = client.post("/admin/reviews/1/acceptFlag")
 
@@ -168,9 +173,12 @@ def test_accept_flag_user_banned(client):
     mockReviews = [mockReview]
     mockUserAfterPenalty = createMockUser(5, penalties=3, isBanned=True)
 
-    with patch("app.routers.adminRoute.loadReviews", return_value=mockReviews), \
-         patch("app.routers.adminRoute.deleteReview"), \
-         patch("app.routers.adminRoute.incrementPenaltyForUser", return_value=mockUserAfterPenalty):
+    with patch("app.routers.adminRoute.loadReviews", return_value=mockReviews), patch(
+        "app.routers.adminRoute.deleteReview"
+    ), patch(
+        "app.routers.adminRoute.incrementPenaltyForUser",
+        return_value=mockUserAfterPenalty,
+    ):
 
         response = client.post("/admin/reviews/1/acceptFlag")
 
@@ -194,8 +202,9 @@ def test_reject_flag_success(client):
     mockReview = createReview(1, 100, 5, flagged=True)
     mockReviews = [mockReview]
 
-    with patch("app.routers.adminRoute.loadReviews", return_value=mockReviews), \
-         patch("app.routers.adminRoute.saveReviews") as mockSave:
+    with patch("app.routers.adminRoute.loadReviews", return_value=mockReviews), patch(
+        "app.routers.adminRoute.saveReviews"
+    ) as mockSave:
 
         response = client.post("/admin/reviews/1/rejectFlag")
 
@@ -224,9 +233,12 @@ def test_mark_inappropriate_success(client):
     mockReviews = [mockReview]
     mockUserAfterPenalty = createMockUser(5, penalties=1, isBanned=False)
 
-    with patch("app.routers.adminRoute.loadReviews", return_value=mockReviews), \
-         patch("app.routers.adminRoute.saveReviews") as mockSave, \
-         patch("app.routers.adminRoute.incrementPenaltyForUser", return_value=mockUserAfterPenalty) as mockPenalty:
+    with patch("app.routers.adminRoute.loadReviews", return_value=mockReviews), patch(
+        "app.routers.adminRoute.saveReviews"
+    ) as mockSave, patch(
+        "app.routers.adminRoute.incrementPenaltyForUser",
+        return_value=mockUserAfterPenalty,
+    ) as mockPenalty:
         response = client.post("/admin/reviews/1/markInappropriate")
 
     assert response.status_code == 200
@@ -241,7 +253,6 @@ def test_mark_inappropriate_success(client):
     savedReviews = mockSave.call_args[0][0]
 
     mockPenalty.assert_called_once_with(5)
-
 
 
 def test_mark_inappropriate_review_not_found(client):
@@ -287,6 +298,130 @@ def test_admin_endpoints_require_admin(client):
         else:
             response = testClient.post(endpoint)
 
+        assert response.status_code == 403
+
+    app.dependency_overrides = {}
+
+
+# ---------------------------
+# ADMIN ROLE MANAGEMENT TESTS
+# ---------------------------
+
+
+def createMockAdminUser(id=1):
+    return User(
+        id=id,
+        username=f"admin{id}",
+        firstName="Admin",
+        lastName="User",
+        age=30,
+        email=f"admin{id}@test.com",
+        pw="hashedpw",
+        role=Role.ADMIN,
+        penalties=0,
+        isBanned=False,
+    )
+
+
+def createMockRegularUser(id=2):
+    return User(
+        id=id,
+        username=f"user{id}",
+        firstName="Test",
+        lastName="User",
+        age=25,
+        email=f"user{id}@test.com",
+        pw="hashedpw",
+        role=Role.USER,
+        penalties=0,
+        isBanned=False,
+    )
+
+
+def test_grant_admin_success(client):
+    updatedUser = createMockAdminUser(id=5)
+
+    with patch("app.routers.adminRoute.grantAdmin", return_value=updatedUser):
+        response = client.put("/admin/5/grantAdmin")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "Admin privileges granted."
+    assert data["userId"] == 5
+    assert data["role"] == Role.ADMIN
+
+
+def test_revoke_admin_success(client):
+    updatedUser = createMockRegularUser(id=5)
+
+    with patch("app.routers.adminRoute.revokeAdmin", return_value=updatedUser):
+        response = client.put("/admin/5/revokeAdmin")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["message"] == "Admin privileges revoked."
+    assert data["userId"] == 5
+    assert data["role"] == Role.USER
+
+
+def test_grant_admin_action_error(client):
+    with patch(
+        "app.routers.adminRoute.grantAdmin",
+        side_effect=adminService.AdminActionError("nope"),
+    ):
+        response = client.put("/admin/5/grantAdmin")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "nope"
+
+
+def test_revoke_admin_action_error(client):
+    with patch(
+        "app.routers.adminRoute.revokeAdmin",
+        side_effect=adminService.AdminActionError("cannot"),
+    ):
+        response = client.put("/admin/5/revokeAdmin")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "cannot"
+
+
+def test_grant_admin_user_not_found(client):
+    with patch(
+        "app.routers.adminRoute.grantAdmin",
+        side_effect=UserNotFoundError("not found"),
+    ):
+        response = client.put("/admin/999/grantAdmin")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "not found"
+
+
+def test_revoke_admin_user_not_found(client):
+    with patch(
+        "app.routers.adminRoute.revokeAdmin",
+        side_effect=UserNotFoundError("missing"),
+    ):
+        response = client.put("/admin/999/revokeAdmin")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "missing"
+
+
+def test_admin_role_endpoints_require_admin(client):
+    def mockFailsRequireAdmin():
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    app.dependency_overrides[requireAdmin] = mockFailsRequireAdmin
+    testClient = TestClient(app)
+
+    endpoints = [
+        "/admin/5/grantAdmin",
+        "/admin/5/revokeAdmin",
+    ]
+
+    for ep in endpoints:
+        response = testClient.put(ep)
         assert response.status_code == 403
 
     app.dependency_overrides = {}

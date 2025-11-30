@@ -7,6 +7,8 @@ from ..schemas.user import CurrentUser
 from .authRoute import requireAdmin
 from ..schemas.admin import AdminFlagResponse, PaginatedFlaggedReviewsResponse
 from ..schemas.review import Review
+from ..services.adminService import grantAdmin, revokeAdmin, AdminActionError
+from app.services.userService import UserNotFoundError
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -14,6 +16,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # ---------------------------
 # Helper functions
 # ---------------------------
+
 
 def getFlaggedReviews() -> List[Review]:
     reviewList = loadReviews()
@@ -33,10 +36,8 @@ def getReviewById(reviewId: int):
 # Accept flag and delete review
 # ---------------------------
 
-@router.post(
-    "/reviews/{reviewId}/acceptFlag", 
-    response_model=AdminFlagResponse
-)
+
+@router.post("/reviews/{reviewId}/acceptFlag", response_model=AdminFlagResponse)
 def acceptReviewFlag(reviewId: int, currentAdmin: CurrentUser = Depends(requireAdmin)):
     """Accept a review flag, delete the review, and penalize the user."""
     _, review = getReviewById(reviewId)
@@ -59,10 +60,8 @@ def acceptReviewFlag(reviewId: int, currentAdmin: CurrentUser = Depends(requireA
 # Reject flag
 # ---------------------------
 
-@router.post(
-    "/reviews/{reviewId}/rejectFlag",
-    response_model=AdminFlagResponse
-)
+
+@router.post("/reviews/{reviewId}/rejectFlag", response_model=AdminFlagResponse)
 def rejectReviewFlag(reviewId: int, currentAdmin: CurrentUser = Depends(requireAdmin)):
     """Reject a review flag and unflag the review."""
     reviewList, review = getReviewById(reviewId)
@@ -76,7 +75,7 @@ def rejectReviewFlag(reviewId: int, currentAdmin: CurrentUser = Depends(requireA
         message="Flag rejected. Review unflagged (no penalty applied).",
         userId=review.userId,
         penaltyCount=0,
-        isBanned=False
+        isBanned=False,
     )
 
 
@@ -84,11 +83,11 @@ def rejectReviewFlag(reviewId: int, currentAdmin: CurrentUser = Depends(requireA
 # Mark review inappropriate
 # ---------------------------
 
-@router.post(
-    "/reviews/{reviewId}/markInappropriate",
-    response_model=AdminFlagResponse
-)
-def markReviewInappropriate(reviewId: int, currentAdmin: CurrentUser = Depends(requireAdmin)):
+
+@router.post("/reviews/{reviewId}/markInappropriate", response_model=AdminFlagResponse)
+def markReviewInappropriate(
+    reviewId: int, currentAdmin: CurrentUser = Depends(requireAdmin)
+):
     """Mark a review as inappropriate and penalize the user."""
     reviewList, review = getReviewById(reviewId)
 
@@ -96,7 +95,6 @@ def markReviewInappropriate(reviewId: int, currentAdmin: CurrentUser = Depends(r
     saveReviews(reviewList)
 
     updatedUser = incrementPenaltyForUser(review.userId)
-
 
     return AdminFlagResponse(
         message="Review flagged and user penalized",
@@ -110,10 +108,8 @@ def markReviewInappropriate(reviewId: int, currentAdmin: CurrentUser = Depends(r
 # Paginated flagged review reports
 # ---------------------------
 
-@router.get(
-    "/reports/reviews",
-    response_model=PaginatedFlaggedReviewsResponse
-)
+
+@router.get("/reports/reviews", response_model=PaginatedFlaggedReviewsResponse)
 def getFlaggedReviewReports(
     page: int = 1,
     pageSize: int = 20,
@@ -132,3 +128,39 @@ def getFlaggedReviewReports(
         pageCount=(len(flaggedReviewList) + pageSize - 1) // pageSize,
         reviews=paginatedReviews,
     )
+
+
+@router.put("/{userId}/grantAdmin")
+def grantAdminPrivileges(
+    userId: int, currentAdmin: CurrentUser = Depends(requireAdmin)
+):
+    """Grant admin privileges to a user."""
+    try:
+        updatedUser = grantAdmin(userId, currentAdmin)
+    except AdminActionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except UserNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {
+        "message": "Admin privileges granted.",
+        "userId": updatedUser.id,
+        "role": updatedUser.role,
+    }
+
+
+@router.put("/{userId}/revokeAdmin")
+def revokeAdminPrivileges(
+    userId: int, currentAdmin: CurrentUser = Depends(requireAdmin)
+):
+    """Revoke admin privileges from a user."""
+    try:
+        updatedUser = revokeAdmin(userId, currentAdmin)
+    except AdminActionError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except UserNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {
+        "message": "Admin privileges revoked.",
+        "userId": updatedUser.id,
+        "role": updatedUser.role,
+    }
