@@ -7,6 +7,13 @@ SpoilerAlert! is a movie review platform built with FastAPI that lets users brow
 
 The backend manages all core logic including reviews, replies, penalties, user accounts, and movie data, while the frontend delivers a clean, responsive UI for both casual users and admins. The platform is designed to be modular, testable, and easy to extend.
 
+## How to run docker
+
+To start, ensure you are in the root file, whatever that may be (e.g. 310-COSC, full-project, or whatever contains ALL the project code.) Next, run this to containerize the backend and frontend, and hopefully everything is good from there:
+```
+docker compose up --build
+```
+
 ## to delete old coverage report and add a new one run the commands: 
 ```
 rm -r htmlcov  

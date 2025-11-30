@@ -13,3 +13,16 @@ services:
 
     working_dir: /app/full-project/backend
     restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./full-project/frontend
+      dockerfile: Dockerfile
+    container_name: movie-review-frontend
+    ports:
+      - "5173:5173"
+    working_dir: /app/full-project/frontend
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://backend:8000
